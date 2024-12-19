@@ -51,6 +51,10 @@
                 "essentials/navigation",
                 "essentials/reusable-snippets"
             ]
+        },
+        {
+            "group": "Formats",
+            "pages": ["formats/pak", "formats/kub"]
         }
     ],
     "footerSocials": {

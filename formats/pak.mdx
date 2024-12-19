@@ -1,0 +1,64 @@
+---
+title: Pak Files
+description: 'A custom archive format for storing compressed files'
+---
+
+Kula World uses a custom archive format for storing multiple compressed files into one file, similar to [**.ZIP**](<https://en.wikipedia.org/wiki/ZIP_(file_format)>) and [**.RAR**](<https://en.wikipedia.org/wiki/RAR_(file_format)>) files. This file format is known as **.PAK**, and is primarily used for storing levels in a world. In some cases, the pak format is used to store the end demo screenshots seen at the end of some demos of the game.
+
+:::warning
+The following applies to the 3 main games: Kula World, Roll Away, and Kula Quest. Demos may apply differently!
+:::
+
+**Things to Note:**
+
+-   The pak format uses [**little endian**](https://en.wikipedia.org/wiki/Endianness).
+-   Each 4 byte value is read as unsigned. `(uint32_t)`
+
+**General Structure**
+
+```
+000h  4    Number of files (N)
+004h  N*8  File entry list (8 bytes per entry: offset, compressed size)
+....  N*4  File name offsets
+....  N*L  File names (Ex. "LEVEL 1", 0x0A, 0x00) (L - total size of all file names)
+....  <=4  Padding / garbage data to 4-byte boundary
+....  ...  Compressed file data
+```
+
+## Header
+
+> In this example, we will be using **HIRO.PAK** from **Roll Away**.
+
+The first 4 bytes in the pak file (**Note** there is no magic header) specify how many compressed files are inside, ex: `14 00 00 00` - which is **20** in decimal. This means that this specific pak file contains **20** compressed files inside.
+
+## File Entries
+
+The next group of 8 bytes pertains to each entry in the pak file, with the first 4 bytes specifying the offset of the file and the next 4 bytes specifying the compressed size. Let's look at the first 2 entries as an example:
+
+The next 8 bytes are `B0 01 00 00 2B 01 00 00`. If we look at the first 4 as stated above (`B0 01 00 00`), this value indicates the offset of the first compressed file, which is **432** in decimal. The next 4 bytes (`2B 01 00 00`) indicate the compressed file size in bytes, which is **299** in this case. Using this knowledge, if we navigate to offset **432** inside the pak file, we can find the start of the first compressed file. We also know that this compressed file has a length of **299** in bytes, which is enough information to extract it.
+
+If we look at the next 8 bytes, which are `DB 02 00 00 8E 01 00 00`, this would indicate the offset and size of the second file. The next 8 bytes after that are `69 04 00 00 E1 01 00 00`, which indicate the offset and size of the third file, etc. This pattern continues until offset **0xA4** in this case, which is the start of the file names.
+
+### File Names
+
+The next group of 4 bytes contain the offsets of each file name for each entry inside the pak file. So, if we look at the next 4 bytes (`F4 00 00 00`), which is the offset of the file name for the first compressed file, which is **244** in decimal. If we navigate to this offset, we can see our first file name, which is `4C 45 56 45 4C 20 31`, and translates to `LEVEL 1`.
+
+Each string of file names ends with 2 bytes: `0A 00`, which indicate a new line character and a null terminator, signifying the end of the string. Then the next file name proceeds that.
+
+### File Data
+
+Each file inside the pak file is compressed with [**zlib**](https://zlib.net/), an old and commonly used compression method. Notice how the start of each compressed file data starts with `78 9C`, which is a common zlib header. Now that we have the required information for the first entry, we can extract it by decompressing the file data at its offset and size, and save the result with its file name.
+
+## Oddities
+
+```
+010h   CB 03 00 00 1C 00 00 00 26 00 00 00 46 49 4E 41   ............FINA
+020h   4C 20 31 31 0A 00 46 49 4E 41 4C 20 31 32 0A 00   L 11..FINAL 12..
+030h   4D 4F 4E 20 78 9C ED DD C9 52 1A 41 1C 07 E0 FF   MON.............
+```
+
+\*Example from **FIELDFI.PAK\***
+
+<br></br>
+
+Some pak files contain garbage data after the file names. For example, **FIELDFI.PAK**, **HAZEFI.PAK**, etc. contain `4D 4F 4E 20`, which translates to `MON `. Other pak files such as **HILLSFI.PAK**, etc. contain `53 49`, which translates to `SI`. Interestingly enough, these characters seem to stem from the `SIMON 1`, `SIMON 2`, `...` naming conventions in the **COPYCAT.PAK** file. They seem to have no effect, as they are presumably just garbage data that align with the 4 byte boundary.
