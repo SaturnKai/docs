@@ -29,6 +29,11 @@
             "name": "Community",
             "icon": "discord",
             "url": "https://discord.com/invite/cQzGRCW"
+        },
+        {
+            "name": "Bluesky",
+            "icon": "bluesky",
+            "url": "https://bsky.app/profile/kulaworkshop.bsky.social"
         }
     ],
     "navigation": [
