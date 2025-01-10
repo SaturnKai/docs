@@ -33,28 +33,26 @@
         {
             "name": "Bluesky",
             "icon": "bluesky",
-            "url": "https://bsky.app/profile/kulaworkshop.bsky.social"
+            "url": "https://bsky.app/profile/kula.quest"
         }
     ],
     "navigation": [
         {
             "group": "Get Started",
-            "pages": ["introduction", "quickstart", "development"]
+            "pages": ["introduction"]
         },
         {
-            "group": "Essentials",
-            "pages": [
-                "essentials/markdown",
-                "essentials/code",
-                "essentials/images",
-                "essentials/settings",
-                "essentials/navigation",
-                "essentials/reusable-snippets"
-            ]
+            "group": "Releases",
+            "pages": ["releases/overview"]
         },
         {
             "group": "Formats",
-            "pages": ["formats/pak", "formats/kub"]
+            "pages": [
+                "formats/pak",
+                "formats/kub",
+                "formats/level",
+                "formats/ggi"
+            ]
         }
     ],
     "footerSocials": {
