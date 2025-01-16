@@ -26,8 +26,8 @@ typedef struct {
     int32_t hourglass_anim_offset_enc; // hourglass spin animation
     int32_t unk_offset1_enc; // block lighting related
     int32_t unk_offset2_enc; // possibly ignored in game, doesn't seem to be read anywhere
-    int32_t unk_offset3_enc; // offset to "dummy!!!" text
-    int32_t unk_offset4_enc; // ball bounce animation
+    int32_t dummy_offset_enc; // offset to "dummy!!!" text
+    int32_t ball_anim_enc; // ball bounce animation
     int32_t sprites_offset_enc;
     int32_t file_size_enc;
     int32_t entity_table_offset_enc;
@@ -45,6 +45,7 @@ The first part of the header contain indexes to different groups of sprites:
 6. Sprites relating to the hourglass hud and various other text elements; the rest of the sprites.
 
 ```c
+// decoding the sprite indexes
 sprite_group_index_1 = sprite_group_index_1;
 sprite_group_index_2 = sprite_group_index_1 + sprite_group_index_2_enc;
 sprite_group_index_3 = sprite_group_index_2 + sprite_group_index_3_enc;
@@ -56,14 +57,16 @@ sprite_group_index_6 = sprite_group_index_5 + sprite_group_index_6_enc;
 Every offset contained in the header is encoded in the following manner for an unknown reason:
 
 ```c
+// decoding the first six offsets
 hourglass_anim_offset = hourglass_anim_offset_enc * 2 + 0x34;
-unk_offset2 = hourglass_anim_offset + unk_offset2_enc * 2;
-unk_offset3 = unk_offset2 + unk_offset3_enc * 2;
-unk_offset4 = unk_offset3 + unk_offset4_enc * 2;
-unk_offset5 = unk_offset4 + unk_offset5_enc * 2;
-sprites_offset = unk_offset5 + sprites_offset_enc * 2;
-file_size = sprites_offset + file_size_enc * 2;
+unk_offset1    = unk_offset1_enc    * 2 + hourglass_anim_offset;
+unk_offset2    = unk_offset2_enc    * 2 + unk_offset1;
+dummy_offset   = dummy_offset_enc   * 2 + unk_offset2;
+ball_anim      = ball_anim_enc      * 2 + dummy_offset;
+sprites_offset = sprites_offset_enc * 2 + ball_anim;
+file_size      = file_size_enc      * 2 + sprites_offset;
 
+// decoding the two table offsets
 entity_table_offset = ((entity_table_offset_enc >> 2) + 0xD) * 4;
 object_table_offset = ((object_table_offset_enc >> 2) + 0xD) * 4;
 ```
@@ -227,3 +230,105 @@ Each vertex color attribute contains an extra byte with flags that specifies add
 | 6   | Unused (0)         |
 | 7   | Transparent        |
 | 8   | Unused (0)         |
+
+## Hourglass Sprite Animation
+
+There is a section dedicated to the hourglass flip animation that is **1920** bytes in size. This animation data is the exact same across all known GGI files.
+
+## Unknown Section 1
+
+This section is currently unknown, and seems to affect block lighting. It is **8192** bytes in size, and is also the exact same across all known GGI files.
+
+## Unknown Section 2
+
+This section is also unknown, and does not seem to be referenced in later releases of the game. It is also **8192** bytes in size, and is also the exact same across all known GGI files.
+
+## Dummy Section
+
+This section contains the text "dummy!!!\r\n\r\n".
+
+## Ball Animation Section
+
+```c
+typedef struct {
+    short x;
+    short y;
+    short z;
+} RelativePositionOffset_t;
+
+typedef struct {
+    short anim_frames;
+    short padding[3];
+    short y_start;
+    short z_start;
+    RelativePositionOffset_t position_offsets[anim_frames - 1];
+} BallAnim_t;
+
+typedef struct {
+    short anim_frames;
+    short padding[3];
+    short y_start;
+    short z_start;
+    RelativePositionOffset_t position_offsets[];
+    short x_end;
+} BallAnim_t;
+```
+
+This section contains data relating to the ball jumping, including jumping forward. Each short position value offsets the ball in that relative direction. Here's an example of the first and last 4 frames of animation from Kula World:
+
+```
+0 0 0 (y_start and z_start)
+-48 61 0
+-96 117 0
+-142 168 0
+...
+-941 158 0
+-969 110 0
+-997 56 0
+-1024 0 0
+```
+
+The Y and Z position start of at 0, and each frame the relative X position is decremented when jumping forward and the Y is incremented for height. At the end of the animation, the Y starts decrementing again until it reaches 0, back to its original position and thus landing the ball.
+
+This section was updated for the Roll Away release, with the animation lasting longer and going slightly into the floor upon landing. This is what causes the [floor clip glitch](https://youtu.be/G6RH7ERGCtI?t=105) in Roll Away.
+
+## Sprites
+
+The first value in the sprite section is the amount of sprites (int32_t). Immediately following this value are all the sprites, which use the following structures:
+
+```c
+typedef struct {
+    short bpp;
+    short blend_op;
+    CLUT_t clut;
+    Texture_t texture;
+} Sprite_t;
+
+typedef struct {
+    short vram_x;
+    short vram_y;
+    short use_prev;
+    short padding = 0;
+    if (bpp != 16) {
+        short data[bpp == 8 ? 256 : 16];
+    }
+} CLUT_t;
+
+typedef struct {
+    short vram_x;
+    short vram_y;
+    short width; // actual width, not in framebuffer pixels
+    short height;
+    if (bpp != 16) {
+        char data[bpp == 8 ? (width * height) : (width * height) / 2];
+    } else {
+        short data[width * height];
+    }
+} Texture_t;
+```
+
+After each sprite's texture, there **may** be extra bytes (which some contain garbage data) to align to the 4 byte boundary.
+
+When a sprite uses **16 bits per pixel**, each pixel is represented directly using 16 bit color instead of a color lookup table (CLUT), and therefore the values for the associated CLUT are set to **-1** in this bit depth (different in the first demo, see below). The only sprite that uses this bit depth is a 2x1 completely white sprite, and its current use in game is **unknown**.
+
+Unique to only the first demo of the game (Kula Quest beta), the 4 CLUT values for a 16 bit sprite are not included, thus after the **bpp and blend operator** values starts the **Texture_t** structure.
